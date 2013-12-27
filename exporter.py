@@ -1,5 +1,5 @@
 from __future__ import division
-import requests, time, sys
+import requests, time, sys, json
 
 ##############
 ## Settings ##
@@ -20,6 +20,44 @@ if not pb_token or not gh_token:
   print "Login information required"
   sys.exit()
 
+def validate_pb_response(status):
+  if status == 200:
+    return True
+  elif status == 403:
+    print "Your Pinboard token didn't seem to work.\nYou should go get it from here: https://pinboard.in/settings/password"
+    print "It should look sorta like this: username:XXXXXXXXXXXXXXXXXXXX"
+    sys.exit()
+  elif r_status == 429:
+    print "Whoa, Nellie! We're goin' too fast! Hold on, and we'll try again in a moment."
+    time.sleep(3) # Pinboard API allows for 1 call every 3 seconds per user.
+    return 'retry'
+  else:
+    return False
+
+def get_current_from_pinboard(pb_token, tags):
+  # with open('data.txt', 'r') as file:
+  #   return json.load(file)
+
+  payload = {
+    'auth_token': pb_token,
+    'tag': tags,
+    'format': 'json'
+  }
+  r = requests.get('https://api.pinboard.in/v1/posts/all', params=payload)
+  status = validate_pb_response(r.status_code)
+  if status == 'retry':
+    return get_current_from_pinboard(pb_token, tags)
+  elif status:
+    bookmarks = json.loads(r.text)
+    # with open('data.txt', 'w') as outfile:
+    #   json.dump(bookmarks, outfile)
+    #   print "done"
+    #   sys.exit()
+    return bookmarks
+  else:
+    print "Something went wrong while trying to get bookmarks"
+    sys.exit()
+
 
 def post_to_pinboard(pb_token, url, title, long_description, tags, replace):
   payload = {
@@ -31,22 +69,15 @@ def post_to_pinboard(pb_token, url, title, long_description, tags, replace):
     'replace': replace
   }
   r = requests.get('https://api.pinboard.in/v1/posts/add', params=payload)
-  r_status = r.status_code
-  if r_status == 200:
-    print "Added " + title
+  status = validate_pb_response(r.status_code)
+  if status == 'retry':
+    return post_to_pinboard(pb_token, url, title, long_description, tags, replace)
+  elif status:
     return 1
-  elif r_status == 403:
-    print "Your Pinboard token didn't seem to work.\nYou should go get it from here: https://pinboard.in/settings/password"
-    print "And paste it below.\nIt should look sorta like this: username:XXXXXXXXXXXXXXXXXXXX"
-    pb_token = raw_input()
-    return post_to_pinboard(pb_token, url, title, long_description, tags, replace)
-  elif r_status == 429:
-    print "Whoa, Nellie! We're goin' too fast! Hold on, and we'll try again in a moment."
-    time.sleep(3) # Pinboard API allows for 1 call every 3 seconds per user.
-    return post_to_pinboard(pb_token, url, title, long_description, tags, replace)
   else:
     print "Something went wrong while trying to bookmark " + title + ". I don't know what, but the http status code was " + r_status
     return 0
+
 
 def get_langs(langs_url, gh_token):
   lang_data = requests.get("%s?access_token=%s" % (langs_url, gh_token))
@@ -61,9 +92,15 @@ def get_langs(langs_url, gh_token):
 
 
 
+existing = {}
+for bookmark in get_current_from_pinboard(pb_token,tags):
+  existing[bookmark['href']] = True
+
+print str(len(existing)) + " existing bookmarks found"
 
 page = 1
-url = 'https://api.github.com/users/' + gh_username + '/starred?per_page=100&page=' # Fetches 100 starred repos per page
+# Fetches 100 starred repos per page. By default, they are sorted in the order they were starred in
+url = 'https://api.github.com/users/' + gh_username + '/starred?per_page=100&page='
 stars = []
 while True: # iterate through the pages of github starred repos
   r = requests.get(url + str(page) + "&access_token=" + gh_token)
@@ -85,12 +122,16 @@ print "Adding your starred repos to Pinboard..."
 skip = False # set to True and fill in repo title to skip all repos before it
 skip_to = ''
 
-
 count = 0
-for item in range(len(stars)):
-  url = stars[item]['html_url']
-  name = stars[item]['name']
-  tagline = stars[item]['description']
+for star in stars:
+  url = star['html_url']
+
+  if url in existing:
+    print "Skipping " + url
+    continue
+
+  name = star['name']
+  tagline = star['description']
 
   title = name
   if skip and title != skip_to:
@@ -101,15 +142,15 @@ for item in range(len(stars)):
   if tagline and len(tagline):
     title += ": " + tagline #max 255 characters according to the pinboard api.
 
-  long_description = "Owner: " + stars[item]['owner']['login']
+  long_description = "Owner: " + star['owner']['login']
 
-  page = stars[item]['homepage']
+  page = star['homepage']
   if not (page == False or page == None or page == "None" or page == "none" or page == ""):
     long_description += "\nHomepage: " + str(page)
 
   curr_tags = tags
 
-  langs = get_langs(stars[item]['languages_url'], gh_token)
+  langs = get_langs(star['languages_url'], gh_token)
   if langs != None:
     langs_str = ''
     for k,v in sorted(langs.iteritems(), key=lambda bytes: bytes[1], reverse=True):
@@ -125,6 +166,7 @@ for item in range(len(stars)):
 
   pinboard_add = post_to_pinboard(pb_token, url, title, long_description, curr_tags, replace)
   if pinboard_add == 1:
+    print "Pinned " + title
     count +=1
 
 if count == 0:
