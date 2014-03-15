@@ -84,7 +84,7 @@ def get_langs(langs_url, gh_token):
   lang_data = requests.get("%s?access_token=%s" % (langs_url, gh_token))
   if lang_data == "{}":
     return None
-  lang_data = lang_data.json
+  lang_data = lang_data.json()
   total_bytes = sum(lang_data.values())
   langs = {}
   for lang,bytes in lang_data.iteritems():
@@ -108,7 +108,7 @@ while True: # iterate through the pages of github starred repos
   if r.status_code != 200:
     print "GitHub returned " + str(r.status_code) + " as status code"
     sys.exit(1)
-  curr = r.json
+  curr = r.json()
   if not len(curr):
     break
   stars.extend(curr)
