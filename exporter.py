@@ -7,6 +7,7 @@ import requests, time, sys, json
 
 replace = "no" #change to "yes" if you want it to replace previously bookmarked repos
 tags = "github imported-by-script" #max of 100 tags, separated by spaces
+skip_limit = 50 # after this many items are skipped, stop importing
 
 pb_token = '' # https://pinboard.in/settings/password
 gh_username = ''
@@ -26,7 +27,7 @@ def validate_pb_response(status):
   elif status == 403:
     print "Your Pinboard token didn't seem to work.\nYou should go get it from here: https://pinboard.in/settings/password"
     print "It should look sorta like this: username:XXXXXXXXXXXXXXXXXXXX"
-    sys.exit()
+    sys.exit(1)
   elif r_status == 429:
     print "Whoa, Nellie! We're goin' too fast! Hold on, and we'll try again in a moment."
     time.sleep(3) # Pinboard API allows for 1 call every 3 seconds per user.
@@ -56,7 +57,7 @@ def get_current_from_pinboard(pb_token, tags):
     return bookmarks
   else:
     print "Something went wrong while trying to get bookmarks"
-    sys.exit()
+    sys.exit(1)
 
 
 def post_to_pinboard(pb_token, url, title, long_description, tags, replace):
@@ -76,7 +77,7 @@ def post_to_pinboard(pb_token, url, title, long_description, tags, replace):
     return 1
   else:
     print "Something went wrong while trying to bookmark " + title + ". I don't know what, but the http status code was " + r_status
-    return 0
+    sys.exit(1)
 
 
 def get_langs(langs_url, gh_token):
@@ -106,7 +107,7 @@ while True: # iterate through the pages of github starred repos
   r = requests.get(url + str(page) + "&access_token=" + gh_token)
   if r.status_code != 200:
     print "GitHub returned " + str(r.status_code) + " as status code"
-    sys.exit()
+    sys.exit(1)
   curr = r.json
   if not len(curr):
     break
@@ -121,6 +122,7 @@ print "Adding your starred repos to Pinboard..."
 
 skip = False # set to True and fill in repo title to skip all repos before it
 skip_to = ''
+skip_count = 0
 
 count = 0
 for star in stars:
@@ -128,6 +130,10 @@ for star in stars:
 
   if url in existing:
     print "Skipping " + url
+    skip_count += 1
+    if skip_count >= skip_limit:
+      print "We've hit the skip limit"
+      sys.exit()
     continue
 
   name = star['name']
@@ -171,6 +177,7 @@ for star in stars:
 
 if count == 0:
   print "Whoops. Something went wrong, so we didn't add anything to your Pinboard."
+  sys.exit(1)
 elif count == 1:
   print "You're all done. You only had one starred repo, so we added that to Pinboard. Go star more repos!"
 elif count > 1:
