@@ -172,7 +172,7 @@ for star in stars:
 
   pinboard_add = post_to_pinboard(pb_token, url, title, long_description, curr_tags, replace)
   if pinboard_add == 1:
-    print "Pinned " + title
+    print "Pinned " + title.encode('utf-8')
     count +=1
 
 if count == 0:
