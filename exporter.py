@@ -28,7 +28,7 @@ def validate_pb_response(status):
     print "Your Pinboard token didn't seem to work.\nYou should go get it from here: https://pinboard.in/settings/password"
     print "It should look sorta like this: username:XXXXXXXXXXXXXXXXXXXX"
     sys.exit(1)
-  elif r_status == 429:
+  elif status == 429:
     print "Whoa, Nellie! We're goin' too fast! Hold on, and we'll try again in a moment."
     time.sleep(3) # Pinboard API allows for 1 call every 3 seconds per user.
     return 'retry'
