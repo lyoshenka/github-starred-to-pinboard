@@ -1,5 +1,6 @@
 from __future__ import division
 import requests, time, sys, json
+from requests.auth import HTTPBasicAuth
 
 ##############
 ## Settings ##
@@ -7,7 +8,7 @@ import requests, time, sys, json
 
 replace = "no" #change to "yes" if you want it to replace previously bookmarked repos
 tags = "github imported-by-script" #max of 100 tags, separated by spaces
-skip_limit = 50 # after this many items are skipped, stop importing
+skip_limit = 200 # after this many items are skipped, stop importing
 
 pb_token = '' # https://pinboard.in/settings/password
 gh_username = ''
@@ -49,6 +50,7 @@ def get_current_from_pinboard(pb_token, tags):
   if status == 'retry':
     return get_current_from_pinboard(pb_token, tags)
   elif status:
+    print r.text
     bookmarks = json.loads(r.text)
     # with open('data.txt', 'w') as outfile:
     #   json.dump(bookmarks, outfile)
@@ -57,6 +59,9 @@ def get_current_from_pinboard(pb_token, tags):
     return bookmarks
   else:
     print "Something went wrong while trying to get bookmarks"
+    print r.status_code
+    print r.headers
+    print r.content
     sys.exit(1)
 
 
@@ -80,8 +85,8 @@ def post_to_pinboard(pb_token, url, title, long_description, tags, replace):
     sys.exit(1)
 
 
-def get_langs(langs_url, gh_token):
-  lang_data = requests.get("%s?access_token=%s" % (langs_url, gh_token))
+def get_langs(langs_url, gh_username, gh_token):
+  lang_data = requests.get(langs_url, auth=HTTPBasicAuth(gh_username,gh_token))
   if lang_data == "{}":
     return None
   lang_data = lang_data.json()
@@ -104,7 +109,7 @@ page = 1
 url = 'https://api.github.com/users/' + gh_username + '/starred?per_page=100&page='
 stars = []
 while True: # iterate through the pages of github starred repos
-  r = requests.get(url + str(page) + "&access_token=" + gh_token)
+  r = requests.get(url + str(page), auth=HTTPBasicAuth(gh_username,gh_token))
   if r.status_code != 200:
     print "GitHub returned " + str(r.status_code) + " as status code"
     sys.exit(1)
@@ -156,7 +161,7 @@ for star in stars:
 
   curr_tags = tags
 
-  langs = get_langs(star['languages_url'], gh_token)
+  langs = get_langs(star['languages_url'], gh_username, gh_token)
   if langs != None:
     langs_str = ''
     for k,v in sorted(langs.iteritems(), key=lambda bytes: bytes[1], reverse=True):
