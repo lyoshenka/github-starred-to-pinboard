@@ -1,4 +1,3 @@
-from __future__ import division
 import requests, time, sys, json
 from requests.auth import HTTPBasicAuth
 
@@ -19,18 +18,18 @@ gh_token = '' # https://github.com/settings/applications
 ###############
 
 if not pb_token or not gh_token:
-  print "Login information required"
+  print("Login information required")
   sys.exit()
 
 def validate_pb_response(status):
   if status == 200:
     return True
   elif status == 403:
-    print "Your Pinboard token didn't seem to work.\nYou should go get it from here: https://pinboard.in/settings/password"
-    print "It should look sorta like this: username:XXXXXXXXXXXXXXXXXXXX"
+    print("Your Pinboard token didn't seem to work.\nYou should go get it from here: https://pinboard.in/settings/password")
+    print("It should look sorta like this: username:XXXXXXXXXXXXXXXXXXXX")
     sys.exit(1)
   elif status == 429:
-    print "Whoa, Nellie! We're goin' too fast! Hold on, and we'll try again in a moment."
+    print("Whoa, Nellie! We're goin' too fast! Hold on, and we'll try again in a moment.")
     time.sleep(3) # Pinboard API allows for 1 call every 3 seconds per user.
     return 'retry'
   else:
@@ -50,18 +49,19 @@ def get_current_from_pinboard(pb_token, tags):
   if status == 'retry':
     return get_current_from_pinboard(pb_token, tags)
   elif status:
-    print r.text
-    bookmarks = json.loads(r.text)
+    text = r.content.decode('utf-8-sig')
+    print(text)
+    bookmarks = json.loads(text)
     # with open('data.txt', 'w') as outfile:
     #   json.dump(bookmarks, outfile)
     #   print "done"
     #   sys.exit()
     return bookmarks
   else:
-    print "Something went wrong while trying to get bookmarks"
-    print r.status_code
-    print r.headers
-    print r.content
+    print("Something went wrong while trying to get bookmarks")
+    print(r.status_code)
+    print(r.headers)
+    print(r.content)
     sys.exit(1)
 
 
@@ -81,7 +81,7 @@ def post_to_pinboard(pb_token, url, title, long_description, tags, replace):
   elif status:
     return 1
   else:
-    print "Something went wrong while trying to bookmark " + title + ". I don't know what, but the http status code was " + r_status
+    print("Something went wrong while trying to bookmark " + title + ". I don't know what, but the http status code was " + r_status)
     sys.exit(1)
 
 
@@ -92,7 +92,7 @@ def get_langs(langs_url, gh_username, gh_token):
   lang_data = lang_data.json()
   total_bytes = sum(lang_data.values())
   langs = {}
-  for lang,bytes in lang_data.iteritems():
+  for lang,bytes in lang_data.items():
     langs[lang] = round(bytes/total_bytes*100,1)
   return langs
 
@@ -102,7 +102,7 @@ existing = {}
 for bookmark in get_current_from_pinboard(pb_token,tags):
   existing[bookmark['href']] = True
 
-print str(len(existing)) + " existing bookmarks found"
+print(str(len(existing)) + " existing bookmarks found")
 
 page = 1
 # Fetches 100 starred repos per page. By default, they are sorted in the order they were starred in
@@ -111,19 +111,19 @@ stars = []
 while True: # iterate through the pages of github starred repos
   r = requests.get(url + str(page), auth=HTTPBasicAuth(gh_username,gh_token))
   if r.status_code != 200:
-    print "GitHub returned " + str(r.status_code) + " as status code"
+    print("GitHub returned " + str(r.status_code) + " as status code")
     sys.exit(1)
   curr = r.json()
   if not len(curr):
     break
   stars.extend(curr)
-  print "Got " + str(len(stars)) + " stars from GitHub so far"
+  print("Got " + str(len(stars)) + " stars from GitHub so far")
   page+=1
 
 
 
 
-print "Adding your starred repos to Pinboard..."
+print("Adding your starred repos to Pinboard...")
 
 skip = False # set to True and fill in repo title to skip all repos before it
 skip_to = ''
@@ -134,10 +134,10 @@ for star in stars:
   url = star['html_url']
 
   if url in existing:
-    print "Skipping " + url
+    print("Skipping " + url)
     skip_count += 1
     if skip_count >= skip_limit:
-      print "We've hit the skip limit"
+      print("We've hit the skip limit")
       sys.exit()
     continue
 
@@ -146,7 +146,7 @@ for star in stars:
 
   title = name
   if skip and title != skip_to:
-    print "Skipping " + title
+    print("Skipping " + title)
     continue;
   skip = False
 
@@ -164,7 +164,7 @@ for star in stars:
   langs = get_langs(star['languages_url'], gh_username, gh_token)
   if langs != None:
     langs_str = ''
-    for k,v in sorted(langs.iteritems(), key=lambda bytes: bytes[1], reverse=True):
+    for k,v in sorted(iter(langs.items()), key=lambda bytes: bytes[1], reverse=True):
       if v >= 30:
         thislang = k.lower()
         if thislang == 'go':
@@ -177,13 +177,13 @@ for star in stars:
 
   pinboard_add = post_to_pinboard(pb_token, url, title, long_description, curr_tags, replace)
   if pinboard_add == 1:
-    print "Pinned " + title.encode('utf-8')
+    print("Pinned " + title)
     count +=1
 
 if count == 0:
-  print "Whoops. Something went wrong, so we didn't add anything to your Pinboard."
+  print("Whoops. Something went wrong, so we didn't add anything to your Pinboard.")
   sys.exit(1)
 elif count == 1:
-  print "You're all done. You only had one starred repo, so we added that to Pinboard. Go star more repos!"
+  print("You're all done. You only had one starred repo, so we added that to Pinboard. Go star more repos!")
 elif count > 1:
-  print "You're all done. All " + str(count) + " repos above have been added to pinboard!"
+  print("You're all done. All " + str(count) + " repos above have been added to pinboard!")
